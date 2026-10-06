@@ -15,8 +15,8 @@
     repo_url: "https://github.com/king950e/ai-writing-studio.git"
     node2_ip: "10.10.10.6"          # IP of node2 (runs cloudflared). Only it may reach the app.
     # From Cloudflare Zero Trust (see SETUP.md step 6). Until these are set, /jobs stays locked.
-    cf_team_domain: "CHANGEME.cloudflareaccess.com"
-    cf_access_aud: "CHANGEME"
+    cf_team_domain: "long-king-0655.cloudflareaccess.com"
+    cf_access_aud: "9d444a18adea318752d51f0c8db6f3efc076601b1be383a22ef60b489f625c88"
     # ---- Defaults (fine to leave) ----
     repo_branch: "main"
     app_user: "studio"
