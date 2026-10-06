@@ -13,7 +13,7 @@
   vars:
     # ---- CHANGE ME ----
     repo_url: "https://github.com/king950e/ai-writing-studio.git"
-    node2_ip: "192.168.1.XX"          # IP of node2 (runs cloudflared). Only it may reach the app.
+    node2_ip: "10.10.10.6"          # IP of node2 (runs cloudflared). Only it may reach the app.
     # From Cloudflare Zero Trust (see SETUP.md step 6). Until these are set, /jobs stays locked.
     cf_team_domain: "CHANGEME.cloudflareaccess.com"
     cf_access_aud: "CHANGEME"
