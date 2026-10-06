@@ -73,16 +73,21 @@ SSH into your Ansible control node, then:
    git clone https://github.com/king950e/ai-writing-studio.git
    cd ai-writing-studio/deploy
    ```
-2. Copy your work history from your PC. Run this **on your PC**, in PowerShell, with your control node's IP:
+2. Make sure the destination folder exists (on the control node):
+   ```bash
+   mkdir -p ~/ai-writing-studio/deploy/files
    ```
-   scp C:\Projects\private\work_history.json stunner@<control-node-IP>:~/ai-writing-studio/deploy/files/work_history.json
+3. Copy your work history from your PC. Run this **on your PC**, in PowerShell. Use the real path to your filled-in file, **in quotes**, and your control node's IP:
    ```
-3. Back on the control node, encrypt it with Ansible Vault:
+   scp "C:\path\to\your\work_history.json" stunner@CONTROL-NODE-IP:ai-writing-studio/deploy/files/
+   ```
+   Tip: in File Explorer, Shift + right-click the file, choose **Copy as path**, and paste it. It comes with the quotes already.
+4. Back on the control node, encrypt it with Ansible Vault:
    ```bash
    ansible-vault encrypt files/work_history.json
    ```
    Choose a vault password you'll remember. `cat files/work_history.json` should now show `$ANSIBLE_VAULT;1.1;AES256...` instead of your info.
-4. Make sure your inventory has node3 under that name, then test the connection:
+5. Make sure your inventory has node3 under that name, then test the connection:
    ```bash
    ansible -i <your-inventory> node3 -m ping
    ```

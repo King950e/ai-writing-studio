@@ -123,11 +123,17 @@ class SetupError(Exception):
 def load_work_history():
     try:
         with open(WORK_HISTORY_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
     except FileNotFoundError:
         raise SetupError("Resume modes are not set up yet: work_history.json is missing on the server.")
     except json.JSONDecodeError as e:
         raise SetupError(f"work_history.json has a JSON mistake on line {e.lineno}.")
+    # Catch a blank or template copy, so the AI isn't asked to build a resume out of nothing.
+    placeholders = ["Your Name", "you@email.com", "Your Job Title", "Company Name", "A real thing you did"]
+    text = json.dumps(data)
+    if not str(data.get("name", "")).strip() or not data.get("experience") or any(p in text for p in placeholders):
+        raise SetupError("work_history.json on the server is still the blank template. Fill in your real info and redeploy.")
+    return data
 
 # ---------- App setup ----------
 logging.basicConfig(

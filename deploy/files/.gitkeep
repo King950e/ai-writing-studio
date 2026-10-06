@@ -1,0 +1,1 @@
+# Put your real work_history.json here on the Ansible control node (never commit it), then: ansible-vault encrypt files/work_history.json
