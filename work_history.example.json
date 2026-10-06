@@ -1,0 +1,34 @@
+{
+  "name": "Your Name",
+  "contact": {
+    "email": "you@email.com",
+    "phone": "555-0142",
+    "location": "City, State"
+  },
+  "summary_notes": "One short line about who you are professionally.",
+  "experience": [
+    {
+      "title": "Your Job Title",
+      "company": "Company Name",
+      "dates": "2023–Present",
+      "bullets": [
+        "A real thing you did in this role",
+        "Another accomplishment, ideally with a number attached",
+        "A third responsibility or win"
+      ]
+    },
+    {
+      "title": "A Previous Role",
+      "company": "Previous Company",
+      "dates": "2021–2023",
+      "bullets": [
+        "Something concrete you did here",
+        "Another one"
+      ]
+    }
+  ],
+  "projects": [
+    { "name": "A Project", "description": "One line: what it did and what tools you used" }
+  ],
+  "skills": ["Python", "Communication", "Problem Solving", "Writing", "Git"]
+}

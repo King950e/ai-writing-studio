@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.log
+*_output.md
+*_output.txt
+repurposed/
+
+# Personal data - never commit
+work_history.json
+deploy/files/work_history.json
+job*.txt

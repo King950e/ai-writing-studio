@@ -1,0 +1,161 @@
+---
+# Deploys the AI Writing Studio web app to the Ollama node (node3) as a systemd service.
+#
+# Run from the Ansible control node:
+#   ansible-playbook -i inventory deploy_writing_studio.yml
+#
+# Fill in the variables marked CHANGE ME first.
+
+- name: Deploy AI Writing Studio
+  hosts: "{{ target_host | default('node3') }}"
+  become: true
+
+  vars:
+    # ---- CHANGE ME ----
+    repo_url: "https://github.com/king950e/ai-writing-studio.git"
+    node2_ip: "192.168.1.XX"          # IP of node2 (runs cloudflared). Only it may reach the app.
+    # From Cloudflare Zero Trust (see SETUP.md step 6). Until these are set, /jobs stays locked.
+    cf_team_domain: "CHANGEME.cloudflareaccess.com"
+    cf_access_aud: "CHANGEME"
+    # ---- Defaults (fine to leave) ----
+    repo_branch: "main"
+    app_user: "studio"
+    app_dir: "/opt/ai-writing-studio"
+    app_port: 5000
+    ollama_model: "qwen3.6:latest"
+    max_input_chars: 4000
+    rate_per_minute: 10               # requests per visitor per minute (repurpose uses 4)
+    rate_per_day: 60
+    require_cf_access: "false"        # "false" = writing tools public, /jobs private. "true" = whole site private.
+    job_max_chars: 15000              # job postings are long
+    num_ctx: 8192                     # model context size; raise if answers come back blank
+    # Your real work history. Keep it next to this playbook, encrypted with:
+    #   ansible-vault encrypt files/work_history.json
+    work_history_src: "files/work_history.json"
+
+  tasks:
+    - name: Install system packages
+      ansible.builtin.apt:
+        name: [git, python3-venv, python3-pip, acl]   # acl lets Ansible run tasks as the service user
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Create a locked-down service user (no login shell)
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        system: true
+        shell: /usr/sbin/nologin
+        home: "{{ app_dir }}"
+        create_home: false
+
+    - name: Create app directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0755"
+
+    - name: Clone or update the repo
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}/app"
+        version: "{{ repo_branch }}"
+        force: true
+      become_user: "{{ app_user }}"
+      notify: Restart writing studio
+
+    - name: Create logs directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}/logs"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0750"
+
+    - name: Install Python requirements into a virtualenv
+      ansible.builtin.pip:
+        requirements: "{{ app_dir }}/app/requirements.txt"
+        virtualenv: "{{ app_dir }}/venv"
+        virtualenv_command: python3 -m venv
+      become_user: "{{ app_user }}"
+      notify: Restart writing studio
+
+    - name: Create private data directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}/data"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0700"
+
+    - name: Copy work history (decrypted from Ansible Vault, readable only by the service user)
+      ansible.builtin.copy:
+        src: "{{ work_history_src }}"
+        dest: "{{ app_dir }}/data/work_history.json"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0600"
+      no_log: true   # keep your personal info out of the Ansible output
+      notify: Restart writing studio
+
+    - name: Check which Ollama models are installed
+      ansible.builtin.command: ollama list
+      register: ollama_models
+      changed_when: false
+
+    - name: Pull the model if it is missing (can take a while)
+      ansible.builtin.command: "ollama pull {{ ollama_model }}"
+      when: ollama_model not in ollama_models.stdout
+      changed_when: true
+
+    - name: Install systemd unit
+      ansible.builtin.template:
+        src: templates/writing-studio.service.j2
+        dest: /etc/systemd/system/writing-studio.service
+        mode: "0644"
+      notify: Restart writing studio
+
+    - name: Enable and start the service
+      ansible.builtin.systemd:
+        name: writing-studio
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Firewall - allow the app port only from node2 (the tunnel)
+      community.general.ufw:
+        rule: allow
+        proto: tcp
+        from_ip: "{{ node2_ip }}"
+        to_port: "{{ app_port }}"
+        comment: "writing-studio via cloudflared on node2"
+
+    - name: Check that UFW is actually enabled
+      ansible.builtin.command: ufw status
+      register: ufw_status
+      changed_when: false
+
+    - name: Warn if UFW is off (the rule above does nothing until it is on)
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: UFW is inactive on {{ inventory_hostname }}, so port {{ app_port }} is open to the whole LAN.
+          Allow SSH first (ufw allow OpenSSH), then run: ufw enable
+      when: "'Status: active' not in ufw_status.stdout"
+
+    - name: Wait for the app to answer its health check
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ app_port }}/health"
+        status_code: 200
+      register: health
+      retries: 10
+      delay: 3
+      until: health.status == 200
+
+  handlers:
+    - name: Restart writing studio
+      ansible.builtin.systemd:
+        name: writing-studio
+        state: restarted
+        daemon_reload: true
