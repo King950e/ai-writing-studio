@@ -36,7 +36,7 @@
   tasks:
     - name: Install system packages
       ansible.builtin.apt:
-        name: [git, python3-venv, python3-pip, acl]   # acl lets Ansible run tasks as the service user
+        name: [git, python3-venv, python3-pip]
         state: present
         update_cache: true
         cache_valid_time: 3600
@@ -49,12 +49,15 @@
         home: "{{ app_dir }}"
         create_home: false
 
+    # The code and venv are owned by root. The service user can read and run them but can't
+    # change them, so a bug in the web app can't rewrite its own code. Only logs/ and data/
+    # belong to the service user.
     - name: Create app directory
       ansible.builtin.file:
         path: "{{ app_dir }}"
         state: directory
-        owner: "{{ app_user }}"
-        group: "{{ app_user }}"
+        owner: root
+        group: root
         mode: "0755"
 
     - name: Clone or update the repo
@@ -63,7 +66,6 @@
         dest: "{{ app_dir }}/app"
         version: "{{ repo_branch }}"
         force: true
-      become_user: "{{ app_user }}"
       notify: Restart writing studio
 
     - name: Create logs directory
@@ -79,8 +81,9 @@
         requirements: "{{ app_dir }}/app/requirements.txt"
         virtualenv: "{{ app_dir }}/venv"
         virtualenv_command: python3 -m venv
-      become_user: "{{ app_user }}"
       notify: Restart writing studio
+      # On a first --check run the repo isn't really cloned yet, so this can't work. Don't stop the dry run.
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Create private data directory
       ansible.builtin.file:
@@ -104,6 +107,7 @@
       ansible.builtin.command: ollama list
       register: ollama_models
       changed_when: false
+      check_mode: false   # read-only, safe to run during --check
 
     - name: Pull the model if it is missing (can take a while)
       ansible.builtin.command: "ollama pull {{ ollama_model }}"
@@ -123,6 +127,7 @@
         enabled: true
         state: started
         daemon_reload: true
+      ignore_errors: "{{ ansible_check_mode }}"   # the unit file doesn't exist yet on a first --check
 
     - name: Firewall - allow the app port only from node2 (the tunnel)
       community.general.ufw:
@@ -136,6 +141,7 @@
       ansible.builtin.command: ufw status
       register: ufw_status
       changed_when: false
+      check_mode: false   # read-only, safe to run during --check
 
     - name: Warn if UFW is off (the rule above does nothing until it is on)
       ansible.builtin.debug:
@@ -152,6 +158,7 @@
       retries: 10
       delay: 3
       until: health.status == 200
+      when: not ansible_check_mode   # nothing is running during a dry run
 
   handlers:
     - name: Restart writing studio
@@ -159,3 +166,4 @@
         name: writing-studio
         state: restarted
         daemon_reload: true
+      ignore_errors: "{{ ansible_check_mode }}"
